@@ -35,7 +35,7 @@ def main():
     except ImportError:
         print(json.dumps({
             "ok": False,
-            "error": "pyicloud not installed. Run: pip install pyicloud",
+            "error": "pyicloud-ipd not installed. Run: pip install pyicloud-ipd  (if pyicloud is installed, uninstall it first: pip uninstall pyicloud)",
             "needs_install": True
         }))
         sys.exit(1)
@@ -92,7 +92,6 @@ def main():
     try:
         for item in api.devices:
             try:
-                status   = item.status()
                 location = item.location()
 
                 dev = {
