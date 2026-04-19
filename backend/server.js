@@ -224,10 +224,13 @@ function runPython(script, args=[], { stdinData=null, timeoutMs=30000 }={}) {
 
 // ── Apple sync ────────────────────────────────────────────────────────────────
 const APPLE_BRIDGE = path.join(__dirname, 'icloud_bridge.py');
-let applePending2FA = false;
-let appleLastSync   = 0;
+let applePending2FA  = false;
+let appleLastSync    = 0;
+let appleBackoffMs   = 0;     // extra delay after transient errors
+let appleBackoffUntil = 0;
 
 async function syncApple(twoFACode=null) {
+  if (!twoFACode && Date.now() < appleBackoffUntil) return;
   if (!twoFACode && Date.now()-appleLastSync < 58000) return;
   if (applePending2FA && !twoFACode) {
     console.log('[Apple] Waiting for 2FA — POST /api/apple/2fa { "code": "XXXXXX" }');
@@ -253,11 +256,20 @@ async function syncApple(twoFACode=null) {
       console.warn('\n⚠️  [Apple] 2FA required — check your iPhone, then:\n   curl -X POST http://localhost:3001/api/apple/2fa -H "Content-Type: application/json" -d "{\\"code\\":\\"123456\\"}"\n');
       return;
     }
-    console.error('[Apple]', result.error); return;
+    if (result.transient) {
+      appleBackoffMs = Math.min((appleBackoffMs || 60000) * 2, 1800000); // 1m → 2m → 4m … max 30m
+      appleBackoffUntil = Date.now() + appleBackoffMs;
+      console.warn(`[Apple] Transient error — backing off ${Math.round(appleBackoffMs/60000)}m: ${result.error}`);
+    } else {
+      console.error('[Apple]', result.error);
+    }
+    return;
   }
 
-  applePending2FA = false;
-  appleLastSync   = Date.now();
+  applePending2FA  = false;
+  appleLastSync    = Date.now();
+  appleBackoffMs   = 0;
+  appleBackoffUntil = 0;
   const devices   = db.getAllDevices();
   let   newCount  = 0;
 

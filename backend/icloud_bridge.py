@@ -47,7 +47,9 @@ def main():
     try:
         api = PyiCloudService(email, password, cookie_directory=cookie_dir)
     except Exception as e:
-        print(json.dumps({"ok": False, "error": str(e)}))
+        err = str(e)
+        transient = '503' in err or 'Service Temporarily Unavailable' in err or 'Temporarily' in err
+        print(json.dumps({"ok": False, "error": err, "transient": transient}))
         sys.exit(1)
 
     # Handle 2FA
@@ -120,7 +122,9 @@ def main():
                 # Don't let one bad device kill the whole response
                 devices_out.append({"id": "error", "name": "error", "error": str(item_err), "location": None})
     except Exception as e:
-        print(json.dumps({"ok": False, "error": f"Failed to fetch devices: {e}"}))
+        err = str(e)
+        transient = '503' in err or 'Service Temporarily Unavailable' in err or 'Temporarily' in err
+        print(json.dumps({"ok": False, "error": f"Failed to fetch devices: {err}", "transient": transient}))
         sys.exit(1)
 
     print(json.dumps({"ok": True, "devices": devices_out}))
