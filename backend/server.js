@@ -221,10 +221,12 @@ function runPython(script, args=[], { stdinData=null, timeoutMs=30000 }={}) {
 }
 
 // ── Apple sync ────────────────────────────────────────────────────────────────
-const APPLE_BRIDGE = path.join(__dirname, 'icloud_bridge.py');
+const APPLE_BRIDGE         = path.join(__dirname, 'icloud_bridge.py');
+const APPLE_COOKIES_BRIDGE = path.join(__dirname, 'apple_cookies_bridge.py');
+const APPLE_COOKIES_FILE   = path.join(__dirname, 'apple_cookies.txt');
 let applePending2FA  = false;
 let appleLastSync    = 0;
-let appleBackoffMs   = 0;     // extra delay after transient errors
+let appleBackoffMs   = 0;
 let appleBackoffUntil = 0;
 
 async function syncApple(twoFACode=null) {
@@ -234,21 +236,28 @@ async function syncApple(twoFACode=null) {
     console.log('[Apple] Waiting for 2FA — POST /api/apple/2fa { "code": "XXXXXX" }');
     return;
   }
-  if (!APPLE_PASS && !twoFACode) {
-    console.warn('[Apple] No password set — add APPLE_ICLOUD_PASSWORD to backend/.env');
+
+  const useCookies = fs.existsSync(APPLE_COOKIES_FILE);
+
+  if (!useCookies && !APPLE_PASS && !twoFACode) {
+    console.warn('[Apple] No credentials — add APPLE_ICLOUD_PASSWORD to backend/.env OR drop apple_cookies.txt in backend/');
     return;
   }
 
   let result;
   try {
-    // Password passed via stdin, not CLI args, to keep it out of process listings
-    const args = [APPLE_EMAIL];
-    if (twoFACode) args.push(twoFACode);
-    result = await runPython(APPLE_BRIDGE, args, { stdinData: APPLE_PASS + '\n', timeoutMs: 60000 });
+    if (useCookies) {
+      result = await runPython(APPLE_COOKIES_BRIDGE, [], { timeoutMs: 60000 });
+    } else {
+      const args = [APPLE_EMAIL];
+      if (twoFACode) args.push(twoFACode);
+      result = await runPython(APPLE_BRIDGE, args, { stdinData: APPLE_PASS + '\n', timeoutMs: 60000 });
+    }
   } catch(e) { console.error('[Apple]', e.message); return; }
 
   if (!result.ok) {
-    if (result.needs_install) { console.error('[Apple] Run: py -m pip install pyicloud'); return; }
+    if (result.needs_install) { console.error('[Apple] Run: pip install -r backend/requirements.txt'); return; }
+    if (result.needs_cookies) { console.warn('[Apple] 🍪', result.error, '\n  Fix:', result.fix); return; }
     if (result.needs2FA) {
       applePending2FA = true;
       console.warn('\n⚠️  [Apple] 2FA required — check your iPhone, then:\n   curl -X POST http://localhost:3001/api/apple/2fa -H "Content-Type: application/json" -d "{\\"code\\":\\"123456\\"}"\n');
@@ -434,7 +443,7 @@ function check2FALimit(ip) {
   return entry.count <= 5;
 }
 
-app.get( '/api/apple/status', (_,res)=>res.json({ email:APPLE_EMAIL, pending2FA:applePending2FA, configured:!!APPLE_PASS, deviceCount:db.getAllDevices().filter(d=>d.source==='apple').length }));
+app.get( '/api/apple/status', (_,res)=>res.json({ email:APPLE_EMAIL, pending2FA:applePending2FA, configured:!!APPLE_PASS||fs.existsSync(APPLE_COOKIES_FILE), cookieAuth:fs.existsSync(APPLE_COOKIES_FILE), deviceCount:db.getAllDevices().filter(d=>d.source==='apple').length }));
 app.post('/api/apple/2fa', async(req,res)=>{
   const ip = req.ip || req.connection.remoteAddress;
   if (!check2FALimit(ip)) return res.status(429).json({ error: 'Too many 2FA attempts — wait 5 minutes' });

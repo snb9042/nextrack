@@ -35,6 +35,19 @@ That's it. The map loads immediately. Add credentials below to see your real dev
 
 ## Apple AirTags
 
+Two ways to connect — **cookie auth is recommended** (no password, no SRP errors):
+
+### Option A — Cookie auth (recommended)
+
+1. Install Chrome extension **"Get cookies.txt LOCALLY"**
+2. Go to **icloud.com** and log in fully (complete any 2FA there)
+3. Click the extension icon → **Export** → save as `backend/apple_cookies.txt`
+4. Restart the server — Apple devices appear automatically
+
+Cookies expire after ~2 weeks. Re-export when sync stops working.
+
+### Option B — Password auth
+
 ```powershell
 py -m pip install -r backend/requirements.txt
 ```
@@ -53,8 +66,6 @@ curl -X POST http://localhost:3001/api/apple/2fa `
   -H "Content-Type: application/json" `
   -d '{"code":"123456"}'
 ```
-
-Session cookie is saved — subsequent restarts connect silently.
 
 ---
 
