@@ -455,9 +455,8 @@ button{font-family:var(--font);cursor:pointer;border:none;outline:none}
 
 <script>
 // ── Config ────────────────────────────────────────────────────────────────────
-const API = 'http://localhost:3001';
-const WS  = 'ws://localhost:3001';
-const MAPS_KEY = 'AIzaSyA5e4gnqMLZfTXogThOLNZcA_pBE_Xcf20';
+const API = '';
+const WS  = `${location.protocol==='https:'?'wss':'ws'}://${location.host}`;
 
 // ── State ─────────────────────────────────────────────────────────────────────
 const S = {
@@ -524,7 +523,7 @@ function updateMarkers() {
     if (!S.markers[d.id]) {
       const m = L.marker(pos, { icon: pinIcon(d, isSel) })
         .addTo(S.map)
-        .bindPopup(`<b>${d.icon} ${d.name}</b><br>${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)}`);
+        .bindPopup(`<b>${_esc(d.icon)} ${_esc(d.name)}</b><br>${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)}`);
       m.on('click', () => selectDevice(d.id));
       S.markers[d.id] = m;
     } else {
@@ -558,7 +557,7 @@ function updateGeofenceCircles() {
       fillOpacity: 0.08,
       weight:      1.5,
       dashArray:   '6 4',
-    }).addTo(S.map).bindPopup(`<b>📍 ${f.name}</b><br>Radius: ${f.radius_m}m`);
+    }).addTo(S.map).bindPopup(`<b>📍 ${_esc(f.name)}</b><br>Radius: ${f.radius_m}m`);
     S.gfCircles.push(c);
   });
 }
@@ -693,11 +692,11 @@ function updateDeviceList() {
   el.innerHTML = S.devices.map(d => {
     const loc = S.locations[d.id];
     const isSel = d.id === S.selected;
-    return `<div class="dev-item${isSel?' active':''}" onclick="selectDevice('${d.id}')">
+    return `<div class="dev-item${isSel?' active':''}" onclick="selectDevice('${_esc(d.id)}')">
       <div class="dev-item-top">
-        <span class="dev-emoji">${d.icon}</span>
+        <span class="dev-emoji">${_esc(d.icon)}</span>
         <div class="dev-meta">
-          <div class="dev-name">${d.name}</div>
+          <div class="dev-name">${_esc(d.name)}</div>
           <div class="dev-src"><span class="chip chip-${d.source==='apple'?'a':'g'}">${d.source==='apple'?'🍎 Find My':'🤖 Find Hub'}</span></div>
         </div>
         <div class="live-dot${d.status!=='active'?' off':''}" style="margin-top:2px"></div>
@@ -711,7 +710,7 @@ function updateDeviceList() {
   const sel = document.getElementById('gf-device');
   const prev = sel.value;
   sel.innerHTML = '<option value="">All devices</option>' +
-    S.devices.map(d => `<option value="${d.id}" ${d.id===prev?'selected':''}>${d.icon} ${d.name}</option>`).join('');
+    S.devices.map(d => `<option value="${_esc(d.id)}" ${d.id===prev?'selected':''}>${_esc(d.icon)} ${_esc(d.name)}</option>`).join('');
 }
 
 function selectDevice(id) {
@@ -744,9 +743,9 @@ function renderLocCard() {
   el.style.display='block';
   el.innerHTML = `
     <div class="lc-head">
-      <span class="lc-emoji">${d.icon}</span>
+      <span class="lc-emoji">${_esc(d.icon)}</span>
       <div>
-        <div class="lc-name">${d.name}</div>
+        <div class="lc-name">${_esc(d.name)}</div>
         <span class="chip chip-${d.source==='apple'?'a':'g'}" style="font-size:9px">${d.source==='apple'?'Apple Find My':'Google Find Hub'}</span>
       </div>
       <div class="live-dot${d.status!=='active'?' off':''}" style="margin-left:auto"></div>
@@ -755,9 +754,9 @@ function renderLocCard() {
       <div class="lc-cell"><span class="lc-k">LAT</span><span class="lc-v">${loc.lat?.toFixed(6)}°</span></div>
       <div class="lc-cell"><span class="lc-k">LNG</span><span class="lc-v">${loc.lng?.toFixed(6)}°</span></div>
       <div class="lc-cell"><span class="lc-k">ACC</span><span class="lc-v">${loc.accuracy ? '±'+loc.accuracy+'m' : '—'}</span></div>
-      <div class="lc-cell"><span class="lc-k">NET</span><span class="lc-v">${loc.network_type||'—'}</span></div>
+      <div class="lc-cell"><span class="lc-k">NET</span><span class="lc-v">${_esc(loc.network_type)||'—'}</span></div>
     </div>
-    ${loc.address ? `<div class="lc-addr">📍 ${loc.address}</div>` : ''}
+    ${loc.address ? `<div class="lc-addr">📍 ${_esc(loc.address)}</div>` : ''}
     <div class="lc-time">Updated ${fmtTime(loc.timestamp)} ${loc.is_old?'· <span style="color:var(--warn)">⚠️ stale</span>':''}</div>
   `;
 }
@@ -824,7 +823,7 @@ function renderDashboard() {
   const loc  = S.locations[S.selected];
 
   document.getElementById('dash-title').textContent = d ? `${d.icon} ${d.name}` : 'Analytics';
-  document.getElementById('dash-sub').textContent   = d ? `${d.source==='apple'?'Apple Find My':'Google Find Hub'} · ${hist.length} data points` : 'Select a device';
+  document.getElementById('dash-sub').textContent   = d ? `${d.source==='apple'?'Apple Find My':'Google Find Hub'} \u00b7 ${hist.length} data points` : 'Select a device';
 
   if (!d) return;
 
@@ -852,7 +851,7 @@ function renderDashboard() {
       <div style="width:6px;height:6px;border-radius:50%;background:${l.source==='apple'?'var(--apple)':'var(--google)'};flex-shrink:0;margin-top:5px"></div>
       <div class="li-body">
         <div style="font-size:11px;font-family:var(--mono)">${l.lat?.toFixed(5)}, ${l.lng?.toFixed(5)}</div>
-        <div class="li-sub">${l.network_type||'—'} · ±${l.accuracy||'?'}m${l.address?` · ${l.address}`:''}</div>
+        <div class="li-sub">${_esc(l.network_type)||'—'} · ±${l.accuracy||'?'}m${l.address?` · ${_esc(l.address)}`:''}</div>
       </div>
       <div class="li-time">${timeSince(l.timestamp)}</div>
     </div>
@@ -880,11 +879,11 @@ function renderDashboard() {
     const mx=Math.max(...vals)||1, mn=Math.min(...vals)||0, rng=(mx-mn)||1;
     const step=sparkW/(vals.length-1||1);
     const pts=vals.map((v,i)=>`${i*step},${sparkH-((v-mn)/rng)*sparkH}`).join(' ');
-    return `<div class="list-item" onclick="selectDevice('${dv.id}')" style="cursor:pointer">
-      <span style="font-size:20px;flex-shrink:0">${dv.icon}</span>
+    return `<div class="list-item" onclick="selectDevice('${_esc(dv.id)}')" style="cursor:pointer">
+      <span style="font-size:20px;flex-shrink:0">${_esc(dv.icon)}</span>
       <div class="li-body">
-        <div class="li-title">${dv.name}</div>
-        <div class="li-sub"><span class="chip chip-${dv.source==='apple'?'a':'g'}" style="font-size:9px">${dv.source}</span> · ${dh.length} pts</div>
+        <div class="li-title">${_esc(dv.name)}</div>
+        <div class="li-sub"><span class="chip chip-${dv.source==='apple'?'a':'g'}" style="font-size:9px">${_esc(dv.source)}</span> · ${dh.length} pts</div>
       </div>
       <svg width="${sparkW}" height="${sparkH}" style="flex-shrink:0;margin-right:8px">
         <polyline points="${pts}" fill="none" stroke="${dv.color||'#2997ff'}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -905,9 +904,9 @@ function renderAlerts() {
     return `<div class="list-item${!a.read?' ':''}">
       <div class="li-icon">${icons[a.type]||'🔔'}</div>
       <div class="li-body">
-        <div class="li-title">${data.message||a.type}</div>
-        <div class="li-sub">${dv?`${dv.icon} ${dv.name}`:a.device_id} · ${timeSince(a.created_at)}</div>
-        ${data.distance?`<div class="li-sub" style="margin-top:2px">Moved ${data.distance}m</div>`:''}
+        <div class="li-title">${_esc(data.message||a.type)}</div>
+        <div class="li-sub">${dv?`${_esc(dv.icon)} ${_esc(dv.name)}`:_esc(a.device_id)} · ${timeSince(a.created_at)}</div>
+        ${data.distance?`<div class="li-sub" style="margin-top:2px">Moved ${_esc(data.distance)}m</div>`:''}
       </div>
       ${!a.read?'<div class="unread-dot"></div>':''}
     </div>`;
@@ -934,10 +933,10 @@ function renderGeofences() {
     return `<div class="list-item">
       <div class="li-icon">📍</div>
       <div class="li-body">
-        <div class="li-title">${f.name}</div>
-        <div class="li-sub">${f.lat?.toFixed(4)}, ${f.lng?.toFixed(4)} · r=${f.radius_m}m${dv?` · ${dv.icon} ${dv.name}`:' · All devices'}</div>
+        <div class="li-title">${_esc(f.name)}</div>
+        <div class="li-sub">${f.lat?.toFixed(4)}, ${f.lng?.toFixed(4)} · r=${f.radius_m}m${dv?` · ${_esc(dv.icon)} ${_esc(dv.name)}`:' · All devices'}</div>
       </div>
-      <button class="btn btn-danger btn-sm" onclick="removeGeofence('${f.id}')">Remove</button>
+      <button class="btn btn-danger btn-sm" onclick="removeGeofence('${_esc(f.id)}')">Remove</button>
     </div>`;
   }).join('') || '<div class="empty">No geofences yet. Add one above or click the map to set coordinates.</div>';
 }
@@ -992,7 +991,7 @@ function renderPatterns() {
       <div class="card" style="padding:20px;text-align:center">
         <div style="font-size:32px;margin-bottom:10px;opacity:.4">🧠</div>
         <div style="font-weight:600;margin-bottom:6px">No patterns detected yet</div>
-        <div style="font-size:12px;color:var(--text3)">Patterns are detected automatically as ${d.icon} ${d.name} accumulates location history. Check back after a few hours of tracking.</div>
+        <div style="font-size:12px;color:var(--text3)">Patterns are detected automatically as ${_esc(d.icon)} ${_esc(d.name)} accumulates location history. Check back after a few hours of tracking.</div>
       </div>`;
     return;
   }
@@ -1000,7 +999,7 @@ function renderPatterns() {
   el.innerHTML = `
     <div class="card">
       <div class="card-hd">
-        <span class="card-title">${d.icon} ${d.name} — Detected Patterns</span>
+        <span class="card-title">${_esc(d.icon)} ${_esc(d.name)} — Detected Patterns</span>
         <span style="font-size:11px;color:var(--text3)">${patterns.length} pattern${patterns.length!==1?'s':''}</span>
       </div>
       <div class="pattern-grid">
@@ -1008,8 +1007,8 @@ function renderPatterns() {
           const data = typeof p.data==='string'?JSON.parse(p.data||'{}'):p.data||{};
           return `<div class="pat-card">
             <div style="font-size:18px;margin-bottom:6px">${typeIcons[p.type]||'📌'}</div>
-            <div class="pat-label">${p.label||typeLabels[p.type]||p.type}</div>
-            <div class="pat-sub">${typeLabels[p.type]||p.type}${data.visitCount?` · ${data.visitCount} visits`:''}</div>
+            <div class="pat-label">${_esc(p.label||typeLabels[p.type]||p.type)}</div>
+            <div class="pat-sub">${_esc(typeLabels[p.type]||p.type)}${data.visitCount?` · ${data.visitCount} visits`:''}</div>
             <div class="conf-bar"><div class="conf-fill" style="width:${Math.round((p.confidence||0)*100)}%"></div></div>
             <div style="font-size:10px;color:var(--text3);margin-top:4px">${Math.round((p.confidence||0)*100)}% confidence</div>
             ${data.center?`<div style="font-size:10px;font-family:var(--mono);color:var(--text3);margin-top:4px">${data.center.lat?.toFixed(4)}, ${data.center.lng?.toFixed(4)}</div>`:''}
@@ -1059,6 +1058,8 @@ async function exportData(format='json') {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+const _esc = s => String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+
 function timeSince(ts) {
   if (!ts) return '—';
   const d = Date.now()-new Date(ts).getTime();
