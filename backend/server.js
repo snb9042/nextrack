@@ -178,12 +178,10 @@ function analyzePatterns(deviceId) {
 }
 
 // ── Python bridge ─────────────────────────────────────────────────────────────
-const PY_CANDIDATES = [
-  'py',
-  'C:\\Users\\chexu\\AppData\\Local\\Programs\\Python\\Python312\\python.exe',
-  'C:\\Users\\chexu\\AppData\\Local\\Programs\\Python\\Python313\\python.exe',
-  'python3', 'python',
-];
+// Resolved once at startup — PYTHON_BIN env var overrides auto-detection
+const PY_CANDIDATES = process.env.PYTHON_BIN
+  ? [process.env.PYTHON_BIN]
+  : ['py', 'python3', 'python'];
 
 function runPython(script, args=[], { stdinData=null, timeoutMs=30000 }={}) {
   return new Promise((resolve, reject) => {
