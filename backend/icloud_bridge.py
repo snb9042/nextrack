@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """
-icloud_bridge.py — fetches all Find My devices via iCloud
+icloud_bridge.py — fetches all Find My devices via pyicloud
 Usage:
   echo "<password>" | python icloud_bridge.py <email>        # first run: may prompt for 2FA
   echo "<password>" | python icloud_bridge.py <email> <code> # submit 2FA/2SA code
 
 Password is read from stdin to keep it out of process listings.
-Tries pyicloud_ipd first (maintained fork), falls back to pyicloud.
 
 Outputs a single JSON line to stdout:
   { "ok": true, "devices": [...] }
@@ -35,27 +34,16 @@ def main():
         print(json.dumps({"ok": False, "error": "Password required via stdin"}))
         sys.exit(1)
 
-    # Try maintained fork first, fall back to original
-    PyiCloudService = None
-    using_ipd = False
     try:
-        from pyicloud_ipd import PyiCloudService
-        using_ipd = True
+        from pyicloud import PyiCloudService
     except ImportError:
-        pass
+        print(json.dumps({
+            "ok": False,
+            "error": "pyicloud not installed. Run: pip install -r backend/requirements.txt",
+            "needs_install": True
+        }))
+        sys.exit(1)
 
-    if PyiCloudService is None:
-        try:
-            from pyicloud import PyiCloudService
-        except ImportError:
-            print(json.dumps({
-                "ok": False,
-                "error": "pyicloud not installed. Run: pip install pyicloud",
-                "needs_install": True
-            }))
-            sys.exit(1)
-
-    # Cookie directory — persists session so 2FA only needed once
     cookie_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.icloud_cookies')
     os.makedirs(cookie_dir, exist_ok=True)
 
@@ -66,44 +54,39 @@ def main():
         print(json.dumps({"ok": False, "error": err, "transient": is_transient(err)}))
         sys.exit(1)
 
-    # Handle 2FA (modern — iPhone push prompt, pyicloud only)
-    requires_2fa = getattr(api, 'requires_2fa', False)
-    if requires_2fa:
+    # Modern 2FA (iPhone push prompt)
+    if getattr(api, 'requires_2fa', False):
         if code_2fa:
-            result = api.validate_2fa_code(code_2fa)
-            if not result:
+            if not api.validate_2fa_code(code_2fa):
                 print(json.dumps({"ok": False, "error": "Invalid 2FA code", "needs2FA": True}))
                 sys.exit(1)
             if not getattr(api, 'is_trusted_session', True):
                 api.trust_session()
         else:
             print(json.dumps({
-                "ok": False,
-                "needs2FA": True,
+                "ok": False, "needs2FA": True,
                 "error": "2FA required — POST /api/apple/2fa with the 6-digit code from your iPhone"
             }))
             sys.exit(0)
 
-    # Handle 2SA (legacy — SMS/trusted device code)
+    # Legacy 2SA (SMS / trusted device code)
     elif getattr(api, 'requires_2sa', False):
         if code_2fa:
             devices = api.trusted_devices
             device  = devices[0] if devices else None
             if device:
                 api.send_verification_code(device)
-                result = api.validate_verification_code(device, code_2fa)
-                if not result:
+                if not api.validate_verification_code(device, code_2fa):
                     print(json.dumps({"ok": False, "error": "Invalid 2SA code", "needs2FA": True}))
                     sys.exit(1)
         else:
             print(json.dumps({
-                "ok": False,
-                "needs2FA": True,
+                "ok": False, "needs2FA": True,
                 "error": "2-step verification required — POST /api/apple/2fa with the code sent to your device"
             }))
             sys.exit(0)
 
-    # Fetch all Find My devices
+    # Fetch Find My devices
     devices_out = []
     try:
         for item in api.devices:
@@ -137,7 +120,7 @@ def main():
         print(json.dumps({"ok": False, "error": f"Failed to fetch devices: {err}", "transient": is_transient(err)}))
         sys.exit(1)
 
-    print(json.dumps({"ok": True, "devices": devices_out, "library": "ipd" if using_ipd else "pyicloud"}))
+    print(json.dumps({"ok": True, "devices": devices_out}))
 
 if __name__ == "__main__":
     main()
