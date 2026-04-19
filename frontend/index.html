@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<meta name="theme-color" content="#080c14"/>
+<title>NexTrack — Unified Location Tracking</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!-- Leaflet (OpenStreetMap fallback — always available, no key needed) -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root {
+  --bg:       #080c14;
+  --bg2:      #0e1520;
+  --bg3:      #141e2e;
+  --bg4:      #1a2540;
+  --border:   rgba(255,255,255,0.07);
+  --border2:  rgba(255,255,255,0.12);
+  --text:     #e2e8f0;
+  --text2:    #94a3b8;
+  --text3:    #475569;
+  --apple:    #2997ff;
+  --google:   #34a853;
+  --warn:     #f59e0b;
+  --danger:   #ef4444;
+  --success:  #22c55e;
+  --r:        12px;--r2:8px;--r3:6px;
+  --font:     'Inter',system-ui,sans-serif;
+  --mono:     'JetBrains Mono',monospace;
+  --sidebar:  272px;
+  --safe-b:   env(safe-area-inset-bottom,0px);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);font-size:13px;overflow:hidden;-webkit-font-smoothing:antialiased}
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+button{font-family:var(--font);cursor:pointer;border:none;outline:none}
+
+/* ── SHELL ─────────────────────────────────────────────────────────────────── */
+.shell{display:flex;height:100vh;overflow:hidden}
+
+/* ── SIDEBAR ───────────────────────────────────────────────────────────────── */
+.sidebar{
+  width:var(--sidebar);flex-shrink:0;
+  background:var(--bg2);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;overflow:hidden;
+  transition:width .25s;z-index:20;
+}
+.sidebar.collapsed{width:56px}
+
+.sb-top{padding:16px 14px 12px;border-bottom:1px solid var(--border);flex-shrink:0}
+.wordmark{display:flex;align-items:center;gap:9px}
+.wm-icon{
+  width:34px;height:34px;border-radius:9px;
+  background:linear-gradient(135deg,#1a3a6e,#0d2044);
+  border:1px solid rgba(41,151,255,.3);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.wm-text{font-size:17px;font-weight:700;letter-spacing:-.3px}
+.wm-text span{color:var(--apple)}
+
+.status-row{
+  display:flex;align-items:center;gap:7px;
+  padding:8px 14px;font-size:11px;color:var(--text3);
+  border-bottom:1px solid var(--border);flex-shrink:0;
+}
+.live-dot{width:6px;height:6px;border-radius:50%;background:var(--success);flex-shrink:0;position:relative}
+.live-dot::after{content:'';position:absolute;inset:-3px;border-radius:50%;background:var(--success);opacity:0;animation:pulse 2s ease-out infinite}
+.live-dot.off{background:var(--text3)}.live-dot.off::after{display:none}
+@keyframes pulse{0%{opacity:.5;transform:scale(1)}100%{opacity:0;transform:scale(2.5)}}
+
+.nav{display:flex;flex-direction:column;gap:1px;padding:8px 8px;border-bottom:1px solid var(--border);flex-shrink:0}
+.nav-item{
+  display:flex;align-items:center;gap:9px;padding:8px 8px;
+  border-radius:var(--r2);color:var(--text3);font-size:12px;font-weight:500;
+  background:none;transition:all .15s;text-align:left;width:100%;position:relative;
+}
+.nav-item:hover{background:var(--bg3);color:var(--text)}
+.nav-item.active{background:rgba(41,151,255,.1);color:var(--apple)}
+.nav-item.active::before{content:'';position:absolute;left:0;top:20%;height:60%;width:2px;background:var(--apple);border-radius:0 2px 2px 0}
+.nav-ico{font-size:16px;flex-shrink:0;width:20px;text-align:center}
+.nav-badge{margin-left:auto;background:var(--danger);color:#fff;border-radius:10px;padding:1px 6px;font-size:10px;font-weight:600}
+
+.section-hd{padding:10px 14px 6px;font-size:10px;font-weight:600;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;flex-shrink:0}
+
+.devlist{flex:1;overflow-y:auto;padding:4px 8px 8px}
+.dev-item{
+  padding:10px 10px;border-radius:var(--r2);border:1px solid transparent;
+  cursor:pointer;margin-bottom:3px;transition:all .15s;position:relative;
+}
+.dev-item:hover{background:var(--bg3);border-color:var(--border)}
+.dev-item.active{background:rgba(41,151,255,.07);border-color:rgba(41,151,255,.3)}
+.dev-item-top{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.dev-emoji{font-size:20px;flex-shrink:0}
+.dev-meta{flex:1;min-width:0}
+.dev-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dev-src{margin-top:2px}
+.chip{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:600;letter-spacing:.03em}
+.chip-a{background:rgba(41,151,255,.12);color:var(--apple);border:1px solid rgba(41,151,255,.25)}
+.chip-g{background:rgba(52,168,83,.12);color:var(--google);border:1px solid rgba(52,168,83,.25)}
+.chip-w{background:rgba(245,158,11,.12);color:var(--warn);border:1px solid rgba(245,158,11,.25)}
+.dev-coords{font-size:10px;color:var(--text3);font-family:var(--mono);display:flex;gap:4px;justify-content:space-between}
+.batt{height:2px;background:var(--border2);border-radius:1px;overflow:hidden;margin-top:5px}
+.batt-fill{height:100%;border-radius:1px;transition:width .5s}
+
+.sb-foot{padding:10px 14px;border-top:1px solid var(--border);flex-shrink:0;display:flex;gap:6px}
+.foot-btn{flex:1;padding:7px;border-radius:var(--r2);background:var(--bg3);border:1px solid var(--border);color:var(--text2);font-size:11px;font-weight:500;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:5px}
+.foot-btn:hover{border-color:var(--border2);color:var(--text)}
+
+/* ── MAIN ──────────────────────────────────────────────────────────────────── */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative}
+
+/* ── MAP ───────────────────────────────────────────────────────────────────── */
+#map-view{flex:1;position:relative;overflow:hidden;display:flex;flex-direction:column}
+#leaflet-map{flex:1;background:var(--bg)}
+
+/* Leaflet dark theme overrides */
+.leaflet-tile{filter:brightness(.7) saturate(.6) hue-rotate(200deg)}
+.leaflet-control-zoom a{background:var(--bg3)!important;color:var(--text)!important;border-color:var(--border)!important}
+.leaflet-popup-content-wrapper{background:var(--bg3);color:var(--text);border:1px solid var(--border2);border-radius:var(--r)}
+.leaflet-popup-tip{background:var(--bg3)}
+
+/* Map overlays */
+.map-legend{
+  position:absolute;top:12px;right:12px;z-index:1000;
+  background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);
+  padding:10px 13px;display:flex;flex-direction:column;gap:7px;
+}
+.leg-row{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text2)}
+.leg-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+
+.loc-card{
+  position:absolute;bottom:160px;left:12px;z-index:1000;
+  background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r);
+  padding:14px;min-width:220px;box-shadow:0 8px 32px rgba(0,0,0,.5);
+  animation:slideUp .25s ease;
+}
+@keyframes slideUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.lc-head{display:flex;align-items:center;gap:9px;margin-bottom:10px}
+.lc-emoji{font-size:22px}
+.lc-name{font-size:14px;font-weight:600}
+.lc-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:8px}
+.lc-cell{background:var(--bg4);border-radius:var(--r3);padding:6px 8px}
+.lc-k{display:block;font-size:9px;color:var(--text3);letter-spacing:.1em;margin-bottom:1px;text-transform:uppercase}
+.lc-v{font-size:12px;font-family:var(--mono)}
+.lc-time{font-size:10px;color:var(--text3);text-align:right}
+.lc-addr{font-size:10px;color:var(--text2);margin-top:5px;padding-top:5px;border-top:1px solid var(--border)}
+
+/* ── TIMELINE ──────────────────────────────────────────────────────────────── */
+.timeline{
+  position:absolute;bottom:0;left:0;right:0;z-index:1000;
+  background:rgba(8,12,20,.95);border-top:1px solid var(--border);
+  padding:11px 14px;backdrop-filter:blur(12px);
+}
+.tl-controls{display:flex;align-items:center;gap:6px;margin-bottom:8px}
+.tl-btn{
+  width:30px;height:30px;border-radius:var(--r2);
+  background:var(--bg3);border:1px solid var(--border);color:var(--text2);
+  display:flex;align-items:center;justify-content:center;font-size:12px;
+  transition:all .15s;flex-shrink:0;
+}
+.tl-btn:hover{border-color:var(--border2);color:var(--text)}
+.tl-play{width:36px;height:36px;font-size:14px;background:var(--apple);border-color:var(--apple);color:#fff}
+.tl-play:hover{opacity:.85}
+.tl-speed{background:var(--bg3);border:1px solid var(--border);color:var(--text2);border-radius:var(--r2);padding:4px 8px;font-family:var(--mono);font-size:11px}
+.tl-times{display:flex;justify-content:space-between;font-size:10px;color:var(--text3);margin-bottom:5px;font-family:var(--mono)}
+.tl-now{color:var(--apple);font-weight:600}
+.tl-scrub{position:relative;height:20px;display:flex;align-items:center;cursor:pointer;margin-bottom:4px}
+.tl-track{position:relative;width:100%;height:3px;background:var(--border2);border-radius:2px}
+.tl-fill{position:absolute;left:0;top:0;bottom:0;background:var(--apple);border-radius:2px;transition:width .05s}
+.tl-thumb{
+  position:absolute;top:50%;transform:translate(-50%,-50%);
+  width:13px;height:13px;border-radius:50%;background:#fff;
+  border:2px solid var(--apple);box-shadow:0 0 8px rgba(41,151,255,.4);
+  cursor:grab;z-index:2;transition:left .05s;
+}
+.tl-thumb:active{cursor:grabbing}
+.tl-meta{font-size:10px;color:var(--text3);display:flex;gap:8px;align-items:center}
+.tl-sep{color:var(--border2)}
+
+/* ── VIEWS (dashboard, alerts, geofences, patterns) ─────────────────────────── */
+.panel-view{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:16px}
+
+.page-title{font-size:18px;font-weight:700;margin-bottom:4px}
+.page-sub{font-size:12px;color:var(--text3)}
+
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+.card-hd{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border-bottom:1px solid var(--border)}
+.card-title{font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.06em;text-transform:uppercase}
+
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:16px;position:relative;overflow:hidden}
+.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--sa,var(--apple))}
+.stat-lbl{font-size:10px;color:var(--text3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px}
+.stat-val{font-size:26px;font-weight:700;font-family:var(--mono)}
+.stat-sub{font-size:10px;color:var(--text3);margin-top:3px}
+
+.list-item{
+  display:flex;align-items:flex-start;gap:10px;
+  padding:10px 16px;border-bottom:1px solid var(--border);
+  transition:background .1s;
+}
+.list-item:last-child{border-bottom:none}
+.list-item:hover{background:var(--bg3)}
+.li-icon{font-size:17px;flex-shrink:0;margin-top:1px}
+.li-body{flex:1;min-width:0}
+.li-title{font-size:13px;font-weight:500;margin-bottom:2px}
+.li-sub{font-size:11px;color:var(--text3)}
+.li-right{flex-shrink:0;text-align:right}
+.li-time{font-size:10px;color:var(--text3)}
+.unread-dot{width:6px;height:6px;border-radius:50%;background:var(--warn);flex-shrink:0;margin-top:4px}
+
+/* Pattern cards */
+.pattern-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px}
+.pat-card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--r2);padding:12px}
+.pat-label{font-size:12px;font-weight:600;margin-bottom:4px}
+.pat-sub{font-size:11px;color:var(--text3)}
+.conf-bar{height:3px;background:var(--border2);border-radius:2px;margin-top:8px;overflow:hidden}
+.conf-fill{height:100%;border-radius:2px;background:var(--apple)}
+
+/* Geofence form */
+.gf-form{padding:14px;display:flex;flex-direction:column;gap:10px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.field label{display:block;font-size:10px;color:var(--text3);margin-bottom:4px;text-transform:uppercase;letter-spacing:.06em}
+.field input,.field select{
+  width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r2);
+  color:var(--text);font-family:var(--font);font-size:13px;padding:8px 10px;outline:none;transition:border-color .2s;
+}
+.field input:focus,.field select:focus{border-color:var(--apple);box-shadow:0 0 0 3px rgba(41,151,255,.1)}
+.field select option{background:var(--bg3)}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:var(--r2);font-size:12px;font-weight:500;cursor:pointer;transition:all .15s}
+.btn-primary{background:var(--apple);color:#fff;border:none}.btn-primary:hover{opacity:.85}
+.btn-secondary{background:var(--bg3);border:1px solid var(--border);color:var(--text2)}.btn-secondary:hover{border-color:var(--border2);color:var(--text)}
+.btn-danger{background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:var(--danger)}.btn-danger:hover{background:rgba(239,68,68,.25)}
+.btn-sm{padding:5px 10px;font-size:11px}
+
+/* Dev sparkline */
+.spark{display:block}
+
+/* Geofence circles on map rendered via Leaflet — no extra CSS needed */
+
+/* Toast */
+.toast{
+  position:fixed;bottom:calc(160px + var(--safe-b));left:50%;transform:translateX(-50%);
+  background:rgba(14,21,32,.98);border:1px solid var(--border2);border-radius:20px;
+  padding:9px 18px;font-size:12px;font-weight:500;white-space:nowrap;
+  animation:toastfade 2.5s ease forwards;pointer-events:none;z-index:9999;
+}
+@keyframes toastfade{0%{opacity:0;transform:translateX(-50%) translateY(8px)}10%{opacity:1;transform:translateX(-50%) translateY(0)}80%{opacity:1}100%{opacity:0}}
+
+/* Source breakdown */
+.src-row{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border)}
+.src-bar-bg{flex:1;height:5px;background:var(--border);border-radius:3px;overflow:hidden}
+.src-bar{height:100%;border-radius:3px;transition:width .5s}
+.src-pct{font-size:12px;font-weight:600;min-width:34px;text-align:right}
+.src-cnt{font-size:10px;color:var(--text3);min-width:28px;text-align:right}
+
+.empty{padding:32px 16px;text-align:center;color:var(--text3);font-size:12px}
+
+@media(max-width:900px){
+  .stat-grid{grid-template-columns:1fr 1fr}
+  .sidebar{position:fixed;left:0;top:0;bottom:0;z-index:100;transform:translateX(-100%);transition:transform .3s}
+  .sidebar.mobile-open{transform:translateX(0)}
+  .main{margin-left:0}
+}
+</style>
+</head>
+<body>
+<div class="shell">
+
+<!-- ── SIDEBAR ──────────────────────────────────────────────────────────────── -->
+<aside class="sidebar" id="sidebar">
+  <div class="sb-top">
+    <div class="wordmark">
+      <div class="wm-icon">
+        <svg width="20" height="20" viewBox="0 0 32 32" fill="none">
+          <circle cx="16" cy="16" r="13" stroke="#2997ff" stroke-width="2.5"/>
+          <circle cx="16" cy="16" r="5" fill="#2997ff"/>
+          <circle cx="16" cy="16" r="1.8" fill="white"/>
+          <path d="M16 3v5M16 24v5M3 16h5M24 16h5" stroke="#2997ff" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div>
+        <div class="wm-text">Nex<span>Track</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="status-row">
+    <div class="live-dot off" id="conn-dot"></div>
+    <span id="conn-text" style="color:var(--text2)">Connecting…</span>
+    <span id="conn-sub" style="margin-left:auto;font-size:10px"></span>
+  </div>
+
+  <!-- Auth status pills -->
+  <div style="display:flex;gap:5px;padding:7px 14px;border-bottom:1px solid var(--border);flex-shrink:0">
+    <div class="chip chip-a" id="apple-pill" style="font-size:9px;cursor:pointer" onclick="forceSync('apple')" title="Click to force sync">🍎 Apple</div>
+    <div class="chip chip-g" id="google-pill" style="font-size:9px;cursor:pointer" onclick="forceSync('google')" title="Click to force sync">🤖 Google</div>
+    <span id="sync-time" style="margin-left:auto;font-size:9px;color:var(--text3)"></span>
+  </div>
+
+  <nav class="nav">
+    <button class="nav-item active" onclick="setView('map',this)">
+      <span class="nav-ico">🗺️</span><span>Live Map</span>
+    </button>
+    <button class="nav-item" onclick="setView('dashboard',this)">
+      <span class="nav-ico">📊</span><span>Analytics</span>
+    </button>
+    <button class="nav-item" onclick="setView('alerts',this)">
+      <span class="nav-ico">🔔</span><span>Alerts</span>
+      <span class="nav-badge" id="alert-badge" style="display:none">0</span>
+    </button>
+    <button class="nav-item" onclick="setView('geofences',this)">
+      <span class="nav-ico">📍</span><span>Geofences</span>
+    </button>
+    <button class="nav-item" onclick="setView('patterns',this)">
+      <span class="nav-ico">🧠</span><span>AI Patterns</span>
+    </button>
+  </nav>
+
+  <div class="section-hd" id="dev-count">DEVICES</div>
+  <div class="devlist" id="device-list"></div>
+
+  <div class="sb-foot">
+    <button class="foot-btn" onclick="exportData()">⬇ Export</button>
+    <button class="foot-btn" onclick="setView('geofences',null)">+ Fence</button>
+  </div>
+</aside>
+
+<!-- ── MAIN ─────────────────────────────────────────────────────────────────── -->
+<main class="main">
+
+  <!-- MAP VIEW -->
+  <div id="view-map" style="flex:1;display:flex;flex-direction:column;position:relative">
+    <div id="leaflet-map" style="flex:1"></div>
+
+    <div class="map-legend">
+      <div class="leg-row"><div class="leg-dot" style="background:var(--apple)"></div>Apple Find My</div>
+      <div class="leg-row"><div class="leg-dot" style="background:var(--google)"></div>Google Find Hub</div>
+    </div>
+
+    <div class="loc-card" id="loc-card" style="display:none"></div>
+
+    <div class="timeline">
+      <div class="tl-controls">
+        <button class="tl-btn" onclick="tlJump(0)" title="Start">⏮</button>
+        <button class="tl-btn tl-play" id="tl-play" onclick="tlToggle()">▶</button>
+        <button class="tl-btn" onclick="tlJump(100)" title="Latest">⏭</button>
+        <select class="tl-speed" id="tl-speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="5">5×</option></select>
+        <span style="margin-left:auto;font-size:10px;color:var(--text3)" id="tl-counter"></span>
+      </div>
+      <div class="tl-times">
+        <span id="tl-start">—</span>
+        <span class="tl-now" id="tl-now">—</span>
+        <span id="tl-end">—</span>
+      </div>
+      <div class="tl-scrub" id="tl-scrub" onclick="tlClick(event)">
+        <div class="tl-track">
+          <div class="tl-fill" id="tl-fill" style="width:100%"></div>
+          <div class="tl-thumb" id="tl-thumb" style="left:100%"></div>
+        </div>
+      </div>
+      <div class="tl-meta" id="tl-meta"></div>
+    </div>
+  </div>
+
+  <!-- DASHBOARD VIEW -->
+  <div id="view-dashboard" class="panel-view" style="display:none">
+    <div>
+      <div class="page-title" id="dash-title">Analytics</div>
+      <div class="page-sub" id="dash-sub">Select a device for detailed stats</div>
+    </div>
+    <div class="stat-grid">
+      <div class="stat-card" style="--sa:var(--apple)"><div class="stat-lbl">Data Points</div><div class="stat-val" id="s-pts">—</div><div class="stat-sub">total pings</div></div>
+      <div class="stat-card" style="--sa:var(--success)"><div class="stat-lbl">Distance</div><div class="stat-val" id="s-dist">—</div><div class="stat-sub">km travelled</div></div>
+      <div class="stat-card" style="--sa:var(--warn)"><div class="stat-lbl">Avg Accuracy</div><div class="stat-val" id="s-acc">—</div><div class="stat-sub">GPS precision</div></div>
+      <div class="stat-card" style="--sa:var(--success)"><div class="stat-lbl">Battery</div><div class="stat-val" id="s-batt">—</div><div class="stat-sub" id="s-batt-sub">—</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="card">
+        <div class="card-hd"><span class="card-title">Recent Locations</span><span id="d-hist-count" style="font-size:11px;color:var(--text3)"></span></div>
+        <div id="d-history" style="max-height:220px;overflow-y:auto"></div>
+      </div>
+      <div class="card">
+        <div class="card-hd"><span class="card-title">Source Breakdown</span></div>
+        <div id="d-sources"></div>
+      </div>
+      <div class="card" style="grid-column:1/-1">
+        <div class="card-hd"><span class="card-title">All Devices</span></div>
+        <div id="d-devices"></div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-secondary" onclick="exportData('csv')">⬇ Export CSV</button>
+      <button class="btn btn-secondary" onclick="exportData('json')">⬇ Export JSON</button>
+    </div>
+  </div>
+
+  <!-- ALERTS VIEW -->
+  <div id="view-alerts" class="panel-view" style="display:none">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div><div class="page-title">Alerts</div><div class="page-sub" id="alerts-sub">All notifications</div></div>
+      <button class="btn btn-secondary btn-sm" onclick="markAllRead()">Mark all read</button>
+    </div>
+    <div class="card" id="alerts-list"></div>
+  </div>
+
+  <!-- GEOFENCES VIEW -->
+  <div id="view-geofences" class="panel-view" style="display:none">
+    <div><div class="page-title">Geofences</div><div class="page-sub">Alert when a device enters or leaves an area</div></div>
+    <div class="card">
+      <div class="card-hd"><span class="card-title">Add Geofence</span></div>
+      <div class="gf-form">
+        <div class="form-row">
+          <div class="field"><label>Name</label><input id="gf-name" placeholder="Home, Work, School…"/></div>
+          <div class="field"><label>Device (optional)</label><select id="gf-device"><option value="">All devices</option></select></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>Latitude</label><input id="gf-lat" placeholder="40.7580" type="number" step="any"/></div>
+          <div class="field"><label>Longitude</label><input id="gf-lng" placeholder="-73.9855" type="number" step="any"/></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>Radius (metres)</label><input id="gf-radius" value="100" type="number" min="10"/></div>
+          <div class="field"><label>Notify on</label>
+            <select id="gf-notify">
+              <option value="both">Enter &amp; Exit</option>
+              <option value="enter">Enter only</option>
+              <option value="exit">Exit only</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-primary" onclick="addGeofence()">+ Add Geofence</button>
+          <button class="btn btn-secondary" onclick="useCurrentDeviceLoc()">📍 Use current device location</button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-hd"><span class="card-title">Active Geofences</span></div>
+      <div id="geofence-list"></div>
+    </div>
+  </div>
+
+  <!-- AI PATTERNS VIEW -->
+  <div id="view-patterns" class="panel-view" style="display:none">
+    <div><div class="page-title">🧠 AI Patterns</div><div class="page-sub">Automatically detected movement patterns and frequent locations</div></div>
+    <div id="patterns-content"></div>
+  </div>
+
+</main>
+</div>
+
+<script>
+// ── Config ────────────────────────────────────────────────────────────────────
+const API = 'http://localhost:3001';
+const WS  = 'ws://localhost:3001';
+const MAPS_KEY = 'AIzaSyA5e4gnqMLZfTXogThOLNZcA_pBE_Xcf20';
+
+// ── State ─────────────────────────────────────────────────────────────────────
+const S = {
+  devices:    [],
+  locations:  {},
+  history:    {},
+  alerts:     [],
+  geofences:  [],
+  patterns:   {},
+  selected:   null,
+  view:       'map',
+  tlPct:      100,
+  tlPlaying:  false,
+  tlInterval: null,
+  map:        null,
+  markers:    {},
+  route:      null,
+  gfCircles:  [],
+  ws:         null,
+  wsTimer:    null,
+};
+
+// ── Leaflet Map ───────────────────────────────────────────────────────────────
+function initMap() {
+  S.map = L.map('leaflet-map', {
+    center: [40.758, -73.985],
+    zoom: 13,
+    zoomControl: true,
+    attributionControl: false,
+  });
+
+  // CartoDB dark tiles — looks professional, no API key needed, always works
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '© OpenStreetMap contributors © CARTO',
+    subdomains: 'abcd',
+    maxZoom: 20,
+  }).addTo(S.map);
+
+  S.map.on('click', e => {
+    // Pre-fill geofence lat/lng when clicking map
+    document.getElementById('gf-lat').value = e.latlng.lat.toFixed(6);
+    document.getElementById('gf-lng').value = e.latlng.lng.toFixed(6);
+  });
+}
+
+function pinIcon(device, isSelected) {
+  const size = isSelected ? 38 : 30;
+  const glow = isSelected ? `drop-shadow(0 0 8px ${device.color})` : '';
+  return L.divIcon({
+    html: `<div style="font-size:${isSelected?24:18}px;filter:${glow};transition:all .2s">${device.icon}</div>`,
+    className: '',
+    iconSize: [size, size],
+    iconAnchor: [size/2, size/2],
+  });
+}
+
+function updateMarkers() {
+  S.devices.forEach(d => {
+    const loc = S.locations[d.id];
+    if (!loc) return;
+    const pos = [loc.lat, loc.lng];
+    const isSel = d.id === S.selected;
+
+    if (!S.markers[d.id]) {
+      const m = L.marker(pos, { icon: pinIcon(d, isSel) })
+        .addTo(S.map)
+        .bindPopup(`<b>${d.icon} ${d.name}</b><br>${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)}`);
+      m.on('click', () => selectDevice(d.id));
+      S.markers[d.id] = m;
+    } else {
+      S.markers[d.id].setLatLng(pos);
+      S.markers[d.id].setIcon(pinIcon(d, isSel));
+    }
+  });
+}
+
+function updateRoute() {
+  if (S.route) { S.map.removeLayer(S.route); S.route = null; }
+  const d = S.devices.find(d => d.id === S.selected);
+  const hist = S.history[S.selected] || [];
+  if (hist.length < 2 || !d) return;
+  S.route = L.polyline(hist.map(p => [p.lat, p.lng]), {
+    color: d.color || '#2997ff',
+    weight: 2.5,
+    opacity: 0.7,
+    dashArray: null,
+  }).addTo(S.map);
+}
+
+function updateGeofenceCircles() {
+  S.gfCircles.forEach(c => S.map.removeLayer(c));
+  S.gfCircles = [];
+  S.geofences.forEach(f => {
+    const c = L.circle([f.lat, f.lng], {
+      radius:      f.radius_m,
+      color:       '#f59e0b',
+      fillColor:   '#f59e0b',
+      fillOpacity: 0.08,
+      weight:      1.5,
+      dashArray:   '6 4',
+    }).addTo(S.map).bindPopup(`<b>📍 ${f.name}</b><br>Radius: ${f.radius_m}m`);
+    S.gfCircles.push(c);
+  });
+}
+
+// ── WebSocket ─────────────────────────────────────────────────────────────────
+function connectWS() {
+  clearTimeout(S.wsTimer);
+  S.ws = new WebSocket(WS);
+
+  S.ws.onopen = () => {
+    setConnStatus(true);
+    loadAll();
+  };
+  S.ws.onclose = () => {
+    setConnStatus(false);
+    S.wsTimer = setTimeout(connectWS, 3000);
+  };
+  S.ws.onerror = () => S.ws.close();
+  S.ws.onmessage = e => {
+    try { handleWS(JSON.parse(e.data)); } catch {}
+  };
+}
+
+function handleWS(msg) {
+  switch (msg.event) {
+    case 'initial_state':
+      S.devices   = msg.devices   || [];
+      S.alerts    = msg.alerts    || [];
+      S.geofences = msg.geofences || [];
+      Object.entries(msg.locations || {}).forEach(([id, loc]) => { S.locations[id] = loc; });
+      S.devices.forEach(d => loadHistory(d.id));
+      renderAll();
+      if (S.devices.length && !S.selected) selectDevice(S.devices[0].id);
+      break;
+
+    case 'location_update':
+      S.locations[msg.deviceId] = msg.location;
+      if (!S.history[msg.deviceId]) S.history[msg.deviceId] = [];
+      S.history[msg.deviceId].push(msg.location);
+      if (S.history[msg.deviceId].length > 500) S.history[msg.deviceId].shift();
+      updateMarkers();
+      if (msg.deviceId === S.selected) { renderLocCard(); updateRoute(); renderTimeline(); }
+      updateDeviceList();
+      document.getElementById('sync-time').textContent = 'now';
+      break;
+
+    case 'devices_updated':
+      S.devices = msg.devices || [];
+      msg.devices.forEach(d => { if (!S.history[d.id]) loadHistory(d.id); });
+      renderAll();
+      break;
+
+    case 'alert':
+      S.alerts.unshift({ ...msg.alert });
+      renderAlerts();
+      showBadge();
+      break;
+
+    case 'geofence_added':
+      S.geofences.push(msg.fence);
+      renderGeofences();
+      updateGeofenceCircles();
+      break;
+
+    case 'geofence_removed':
+      S.geofences = S.geofences.filter(f => f.id !== msg.id);
+      renderGeofences();
+      updateGeofenceCircles();
+      break;
+  }
+}
+
+function setConnStatus(ok) {
+  document.getElementById('conn-dot').className = ok ? 'live-dot' : 'live-dot off';
+  document.getElementById('conn-text').textContent = ok ? 'Live' : 'Offline';
+  document.getElementById('conn-text').style.color = ok ? 'var(--success)' : 'var(--danger)';
+  document.getElementById('conn-sub').textContent = ok ? '' : '· Reconnecting';
+}
+
+// ── Data loading ──────────────────────────────────────────────────────────────
+async function loadAll() {
+  try {
+    const [devs, alerts, gf] = await Promise.all([
+      fetch(`${API}/api/devices`).then(r=>r.json()),
+      fetch(`${API}/api/alerts`).then(r=>r.json()),
+      fetch(`${API}/api/geofences`).then(r=>r.json()),
+    ]);
+    S.devices   = devs;
+    S.alerts    = alerts;
+    S.geofences = gf;
+    // Load latest location for each device
+    await Promise.all(devs.map(async d => {
+      const loc = await fetch(`${API}/api/devices/${d.id}/latest`).then(r=>r.json());
+      if (loc) S.locations[d.id] = loc;
+    }));
+    renderAll();
+    if (devs.length && !S.selected) selectDevice(devs[0].id);
+  } catch {}
+}
+
+async function loadHistory(deviceId) {
+  try {
+    const h = await fetch(`${API}/api/devices/${deviceId}/history?limit=300`).then(r=>r.json());
+    S.history[deviceId] = h;
+    if (deviceId === S.selected) { updateRoute(); renderTimeline(); }
+  } catch {}
+}
+
+async function loadPatterns(deviceId) {
+  try {
+    const p = await fetch(`${API}/api/devices/${deviceId}/patterns`).then(r=>r.json());
+    S.patterns[deviceId] = p;
+    if (S.view === 'patterns') renderPatterns();
+  } catch {}
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function renderAll() {
+  updateDeviceList();
+  updateMarkers();
+  updateGeofenceCircles();
+  renderAlerts();
+  renderGeofences();
+  showBadge();
+  if (S.view === 'dashboard') renderDashboard();
+  if (S.view === 'patterns')  renderPatterns();
+}
+
+function updateDeviceList() {
+  const el = document.getElementById('device-list');
+  document.getElementById('dev-count').textContent = `DEVICES · ${S.devices.length}`;
+  el.innerHTML = S.devices.map(d => {
+    const loc = S.locations[d.id];
+    const isSel = d.id === S.selected;
+    return `<div class="dev-item${isSel?' active':''}" onclick="selectDevice('${d.id}')">
+      <div class="dev-item-top">
+        <span class="dev-emoji">${d.icon}</span>
+        <div class="dev-meta">
+          <div class="dev-name">${d.name}</div>
+          <div class="dev-src"><span class="chip chip-${d.source==='apple'?'a':'g'}">${d.source==='apple'?'🍎 Find My':'🤖 Find Hub'}</span></div>
+        </div>
+        <div class="live-dot${d.status!=='active'?' off':''}" style="margin-top:2px"></div>
+      </div>
+      ${loc ? `<div class="dev-coords"><span>${loc.lat?.toFixed(4)}°</span><span>${Math.abs(loc.lng||0).toFixed(4)}°</span><span>${timeSince(loc.timestamp)}</span></div>` : '<div class="dev-coords" style="color:var(--text3)">No location yet</div>'}
+      ${d.battery_level != null ? `<div class="batt"><div class="batt-fill" style="width:${d.battery_level}%;background:${d.battery_level>20?'var(--success)':'var(--danger)'}"></div></div>` : ''}
+    </div>`;
+  }).join('');
+
+  // Update geofence device selector
+  const sel = document.getElementById('gf-device');
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">All devices</option>' +
+    S.devices.map(d => `<option value="${d.id}" ${d.id===prev?'selected':''}>${d.icon} ${d.name}</option>`).join('');
+}
+
+function selectDevice(id) {
+  S.selected = id;
+  updateDeviceList();
+  updateMarkers();
+
+  // Pan map to device
+  const loc = S.locations[id];
+  if (loc && S.map) S.map.panTo([loc.lat, loc.lng]);
+
+  // Load history if needed
+  if (!S.history[id] || S.history[id].length === 0) {
+    loadHistory(id);
+  } else {
+    updateRoute();
+    renderTimeline();
+  }
+
+  loadPatterns(id);
+  renderLocCard();
+  if (S.view === 'dashboard') renderDashboard();
+}
+
+function renderLocCard() {
+  const d   = S.devices.find(d => d.id === S.selected);
+  const loc = S.locations[S.selected];
+  const el  = document.getElementById('loc-card');
+  if (!d || !loc) { el.style.display='none'; return; }
+  el.style.display='block';
+  el.innerHTML = `
+    <div class="lc-head">
+      <span class="lc-emoji">${d.icon}</span>
+      <div>
+        <div class="lc-name">${d.name}</div>
+        <span class="chip chip-${d.source==='apple'?'a':'g'}" style="font-size:9px">${d.source==='apple'?'Apple Find My':'Google Find Hub'}</span>
+      </div>
+      <div class="live-dot${d.status!=='active'?' off':''}" style="margin-left:auto"></div>
+    </div>
+    <div class="lc-grid">
+      <div class="lc-cell"><span class="lc-k">LAT</span><span class="lc-v">${loc.lat?.toFixed(6)}°</span></div>
+      <div class="lc-cell"><span class="lc-k">LNG</span><span class="lc-v">${loc.lng?.toFixed(6)}°</span></div>
+      <div class="lc-cell"><span class="lc-k">ACC</span><span class="lc-v">${loc.accuracy ? '±'+loc.accuracy+'m' : '—'}</span></div>
+      <div class="lc-cell"><span class="lc-k">NET</span><span class="lc-v">${loc.network_type||'—'}</span></div>
+    </div>
+    ${loc.address ? `<div class="lc-addr">📍 ${loc.address}</div>` : ''}
+    <div class="lc-time">Updated ${fmtTime(loc.timestamp)} ${loc.is_old?'· <span style="color:var(--warn)">⚠️ stale</span>':''}</div>
+  `;
+}
+
+// ── Timeline ──────────────────────────────────────────────────────────────────
+function renderTimeline() {
+  const hist = (S.history[S.selected]||[]);
+  if (!hist.length) return;
+  const idx  = Math.floor((S.tlPct/100)*(hist.length-1));
+  const cur  = hist[idx];
+  document.getElementById('tl-start').textContent   = fmtTime(hist[0]?.timestamp);
+  document.getElementById('tl-end').textContent     = fmtTime(hist[hist.length-1]?.timestamp);
+  document.getElementById('tl-now').textContent     = fmtTime(cur?.timestamp);
+  document.getElementById('tl-fill').style.width    = `${S.tlPct}%`;
+  document.getElementById('tl-thumb').style.left    = `${S.tlPct}%`;
+  document.getElementById('tl-counter').textContent = `${idx+1} / ${hist.length}`;
+  if (cur) {
+    document.getElementById('tl-meta').innerHTML = `
+      <span>${cur.lat?.toFixed(5)}°, ${cur.lng?.toFixed(5)}°</span>
+      <span class="tl-sep">·</span>
+      <span>${cur.accuracy?'±'+cur.accuracy+'m':'—'}</span>
+      <span class="tl-sep">·</span>
+      <span class="chip chip-${cur.source==='apple'?'a':'g'}" style="font-size:9px">${cur.source}</span>
+    `;
+  }
+}
+
+function tlClick(e) {
+  const rect = document.getElementById('tl-scrub').getBoundingClientRect();
+  S.tlPct = Math.max(0, Math.min(100, ((e.clientX-rect.left)/rect.width)*100));
+  renderTimeline();
+}
+function tlJump(pct) { S.tlPct=pct; renderTimeline(); }
+function tlToggle() {
+  S.tlPlaying = !S.tlPlaying;
+  document.getElementById('tl-play').textContent = S.tlPlaying ? '⏸' : '▶';
+  if (S.tlPlaying) {
+    if (S.tlPct >= 100) S.tlPct = 0;
+    S.tlInterval = setInterval(() => {
+      const spd = parseFloat(document.getElementById('tl-speed').value)||1;
+      S.tlPct = Math.min(100, S.tlPct + 0.4*spd);
+      if (S.tlPct >= 100) { S.tlPlaying=false; document.getElementById('tl-play').textContent='▶'; clearInterval(S.tlInterval); }
+      renderTimeline();
+    }, 100);
+  } else clearInterval(S.tlInterval);
+}
+
+document.getElementById('tl-thumb').addEventListener('mousedown', e => {
+  e.preventDefault();
+  const move = ev => {
+    const rect = document.getElementById('tl-scrub').getBoundingClientRect();
+    S.tlPct = Math.max(0, Math.min(100, ((ev.clientX-rect.left)/rect.width)*100));
+    renderTimeline();
+  };
+  const up = () => { document.removeEventListener('mousemove',move); document.removeEventListener('mouseup',up); };
+  document.addEventListener('mousemove',move);
+  document.addEventListener('mouseup',up);
+});
+
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+function renderDashboard() {
+  const d    = S.devices.find(d=>d.id===S.selected);
+  const hist = S.history[S.selected]||[];
+  const loc  = S.locations[S.selected];
+
+  document.getElementById('dash-title').textContent = d ? `${d.icon} ${d.name}` : 'Analytics';
+  document.getElementById('dash-sub').textContent   = d ? `${d.source==='apple'?'Apple Find My':'Google Find Hub'} · ${hist.length} data points` : 'Select a device';
+
+  if (!d) return;
+
+  // Stats
+  let dist = 0;
+  for (let i=1;i<hist.length;i++) {
+    const a=hist[i-1],b=hist[i];
+    const R=6371000,dLat=(b.lat-a.lat)*Math.PI/180,dLng=(b.lng-a.lng)*Math.PI/180;
+    const x=Math.sin(dLat/2)**2+Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLng/2)**2;
+    dist+=R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+  }
+  const avgAcc = hist.length ? (hist.reduce((s,l)=>s+(l.accuracy||0),0)/hist.length).toFixed(1) : '—';
+
+  document.getElementById('s-pts').textContent      = hist.length;
+  document.getElementById('s-dist').textContent     = (dist/1000).toFixed(2);
+  document.getElementById('s-acc').textContent      = avgAcc !== '—' ? `±${avgAcc}m` : '—';
+  document.getElementById('s-batt').textContent     = d.battery_level != null ? `${d.battery_level}%` : '—';
+  document.getElementById('s-batt-sub').textContent = d.battery_level != null ? (d.battery_level>20?'Healthy':'Low battery') : 'unknown';
+
+  // History list
+  const recent = hist.slice().reverse().slice(0,20);
+  document.getElementById('d-hist-count').textContent = `${recent.length} recent`;
+  document.getElementById('d-history').innerHTML = recent.map((l,i) => `
+    <div class="list-item">
+      <div style="width:6px;height:6px;border-radius:50%;background:${l.source==='apple'?'var(--apple)':'var(--google)'};flex-shrink:0;margin-top:5px"></div>
+      <div class="li-body">
+        <div style="font-size:11px;font-family:var(--mono)">${l.lat?.toFixed(5)}, ${l.lng?.toFixed(5)}</div>
+        <div class="li-sub">${l.network_type||'—'} · ±${l.accuracy||'?'}m${l.address?` · ${l.address}`:''}</div>
+      </div>
+      <div class="li-time">${timeSince(l.timestamp)}</div>
+    </div>
+  `).join('') || '<div class="empty">No history yet</div>';
+
+  // Source breakdown
+  const srcCnt = {};
+  hist.forEach(l => { srcCnt[l.source]=(srcCnt[l.source]||0)+1; });
+  document.getElementById('d-sources').innerHTML = Object.entries(srcCnt).map(([src,cnt]) => {
+    const pct = Math.round((cnt/hist.length)*100);
+    return `<div class="src-row">
+      <span class="chip chip-${src==='apple'?'a':'g'}" style="font-size:9px;min-width:75px">${src==='apple'?'Apple Find My':'Google Find Hub'}</span>
+      <div class="src-bar-bg"><div class="src-bar" style="width:${pct}%;background:${src==='apple'?'var(--apple)':'var(--google)'}"></div></div>
+      <span class="src-pct">${pct}%</span>
+      <span class="src-cnt">${cnt}</span>
+    </div>`;
+  }).join('') || '<div class="empty">No data</div>';
+
+  // All devices
+  document.getElementById('d-devices').innerHTML = S.devices.map(dv => {
+    const dh = S.history[dv.id]||[];
+    const dl = S.locations[dv.id];
+    const sparkH = 24, sparkW = 80;
+    const vals = dh.slice(-20).map(p=>p.accuracy||0);
+    const mx=Math.max(...vals)||1, mn=Math.min(...vals)||0, rng=(mx-mn)||1;
+    const step=sparkW/(vals.length-1||1);
+    const pts=vals.map((v,i)=>`${i*step},${sparkH-((v-mn)/rng)*sparkH}`).join(' ');
+    return `<div class="list-item" onclick="selectDevice('${dv.id}')" style="cursor:pointer">
+      <span style="font-size:20px;flex-shrink:0">${dv.icon}</span>
+      <div class="li-body">
+        <div class="li-title">${dv.name}</div>
+        <div class="li-sub"><span class="chip chip-${dv.source==='apple'?'a':'g'}" style="font-size:9px">${dv.source}</span> · ${dh.length} pts</div>
+      </div>
+      <svg width="${sparkW}" height="${sparkH}" style="flex-shrink:0;margin-right:8px">
+        <polyline points="${pts}" fill="none" stroke="${dv.color||'#2997ff'}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <div class="live-dot${dv.status!=='active'?' off':''}" style="margin-top:5px;flex-shrink:0"></div>
+    </div>`;
+  }).join('');
+}
+
+// ── Alerts ────────────────────────────────────────────────────────────────────
+function renderAlerts() {
+  const unread = S.alerts.filter(a=>!a.read).length;
+  document.getElementById('alerts-sub').textContent = `${unread} unread · ${S.alerts.length} total`;
+  const icons = { significant_move:'📍', unreachable:'⚠️', geofence_enter:'🟢', geofence_exit:'🔴', new_location:'🔔' };
+  document.getElementById('alerts-list').innerHTML = S.alerts.slice(0,50).map(a => {
+    const dv = S.devices.find(d=>d.id===a.device_id);
+    const data = typeof a.data==='string'?JSON.parse(a.data||'{}'):a.data||{};
+    return `<div class="list-item${!a.read?' ':''}">
+      <div class="li-icon">${icons[a.type]||'🔔'}</div>
+      <div class="li-body">
+        <div class="li-title">${data.message||a.type}</div>
+        <div class="li-sub">${dv?`${dv.icon} ${dv.name}`:a.device_id} · ${timeSince(a.created_at)}</div>
+        ${data.distance?`<div class="li-sub" style="margin-top:2px">Moved ${data.distance}m</div>`:''}
+      </div>
+      ${!a.read?'<div class="unread-dot"></div>':''}
+    </div>`;
+  }).join('') || '<div class="empty">No alerts yet</div>';
+}
+
+function showBadge() {
+  const unread = S.alerts.filter(a=>!a.read).length;
+  const b = document.getElementById('alert-badge');
+  b.style.display = unread > 0 ? '' : 'none';
+  b.textContent = unread;
+}
+
+async function markAllRead() {
+  await fetch(`${API}/api/alerts/read-all`, { method:'PATCH' });
+  S.alerts.forEach(a=>a.read=true);
+  renderAlerts(); showBadge();
+}
+
+// ── Geofences ─────────────────────────────────────────────────────────────────
+function renderGeofences() {
+  document.getElementById('geofence-list').innerHTML = S.geofences.map(f => {
+    const dv = f.device_id ? S.devices.find(d=>d.id===f.device_id) : null;
+    return `<div class="list-item">
+      <div class="li-icon">📍</div>
+      <div class="li-body">
+        <div class="li-title">${f.name}</div>
+        <div class="li-sub">${f.lat?.toFixed(4)}, ${f.lng?.toFixed(4)} · r=${f.radius_m}m${dv?` · ${dv.icon} ${dv.name}`:' · All devices'}</div>
+      </div>
+      <button class="btn btn-danger btn-sm" onclick="removeGeofence('${f.id}')">Remove</button>
+    </div>`;
+  }).join('') || '<div class="empty">No geofences yet. Add one above or click the map to set coordinates.</div>';
+}
+
+async function addGeofence() {
+  const name   = document.getElementById('gf-name').value.trim();
+  const lat    = parseFloat(document.getElementById('gf-lat').value);
+  const lng    = parseFloat(document.getElementById('gf-lng').value);
+  const radius = parseFloat(document.getElementById('gf-radius').value)||100;
+  const device = document.getElementById('gf-device').value || null;
+  const notify = document.getElementById('gf-notify').value;
+  if (!name || !lat || !lng) { toast('⚠️ Name, lat and lng are required'); return; }
+  const r = await fetch(`${API}/api/geofences`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ name, lat, lng, radius_m:radius, device_id:device, notify_enter:notify!=='exit'?1:0, notify_exit:notify!=='enter'?1:0 }),
+  });
+  const fence = await r.json();
+  S.geofences.push(fence);
+  renderGeofences();
+  updateGeofenceCircles();
+  toast(`✅ Geofence "${name}" added`);
+  document.getElementById('gf-name').value='';
+}
+
+async function removeGeofence(id) {
+  await fetch(`${API}/api/geofences/${id}`, { method:'DELETE' });
+  S.geofences = S.geofences.filter(f=>f.id!==id);
+  renderGeofences();
+  updateGeofenceCircles();
+}
+
+function useCurrentDeviceLoc() {
+  const loc = S.locations[S.selected];
+  if (!loc) { toast('⚠️ Select a device with a known location first'); return; }
+  document.getElementById('gf-lat').value = loc.lat.toFixed(6);
+  document.getElementById('gf-lng').value = loc.lng.toFixed(6);
+  toast('📍 Coordinates set from current device location');
+}
+
+// ── AI Patterns ───────────────────────────────────────────────────────────────
+function renderPatterns() {
+  const d = S.devices.find(d=>d.id===S.selected);
+  const patterns = S.patterns[S.selected]||[];
+  const el = document.getElementById('patterns-content');
+
+  const typeIcons = { frequent_location:'🏠', stationary:'🧘', visited_place:'📌' };
+  const typeLabels = { frequent_location:'Frequent Location', stationary:'Stationary Period', visited_place:'Visited Place' };
+
+  if (!d) { el.innerHTML = '<div class="empty">Select a device to see patterns</div>'; return; }
+  if (!patterns.length) {
+    el.innerHTML = `
+      <div class="card" style="padding:20px;text-align:center">
+        <div style="font-size:32px;margin-bottom:10px;opacity:.4">🧠</div>
+        <div style="font-weight:600;margin-bottom:6px">No patterns detected yet</div>
+        <div style="font-size:12px;color:var(--text3)">Patterns are detected automatically as ${d.icon} ${d.name} accumulates location history. Check back after a few hours of tracking.</div>
+      </div>`;
+    return;
+  }
+
+  el.innerHTML = `
+    <div class="card">
+      <div class="card-hd">
+        <span class="card-title">${d.icon} ${d.name} — Detected Patterns</span>
+        <span style="font-size:11px;color:var(--text3)">${patterns.length} pattern${patterns.length!==1?'s':''}</span>
+      </div>
+      <div class="pattern-grid">
+        ${patterns.map(p => {
+          const data = typeof p.data==='string'?JSON.parse(p.data||'{}'):p.data||{};
+          return `<div class="pat-card">
+            <div style="font-size:18px;margin-bottom:6px">${typeIcons[p.type]||'📌'}</div>
+            <div class="pat-label">${p.label||typeLabels[p.type]||p.type}</div>
+            <div class="pat-sub">${typeLabels[p.type]||p.type}${data.visitCount?` · ${data.visitCount} visits`:''}</div>
+            <div class="conf-bar"><div class="conf-fill" style="width:${Math.round((p.confidence||0)*100)}%"></div></div>
+            <div style="font-size:10px;color:var(--text3);margin-top:4px">${Math.round((p.confidence||0)*100)}% confidence</div>
+            ${data.center?`<div style="font-size:10px;font-family:var(--mono);color:var(--text3);margin-top:4px">${data.center.lat?.toFixed(4)}, ${data.center.lng?.toFixed(4)}</div>`:''}
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+}
+
+// ── Navigation ────────────────────────────────────────────────────────────────
+function setView(name, btn) {
+  S.view = name;
+  document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+
+  const views = ['map','dashboard','alerts','geofences','patterns'];
+  views.forEach(v => {
+    const el = document.getElementById(`view-${v}`);
+    if (el) el.style.display = v===name ? (v==='map'?'flex':'flex') : 'none';
+  });
+
+  if (name==='dashboard') { renderDashboard(); }
+  if (name==='alerts')    { renderAlerts(); }
+  if (name==='geofences') { renderGeofences(); }
+  if (name==='patterns')  { renderPatterns(); if(S.selected) loadPatterns(S.selected); }
+  if (name==='map')       { setTimeout(()=>S.map?.invalidateSize(),100); }
+}
+
+// ── Sync ──────────────────────────────────────────────────────────────────────
+async function forceSync(source) {
+  const pill = document.getElementById(`${source}-pill`);
+  const orig = pill.textContent;
+  pill.textContent = '⟳ syncing…';
+  try {
+    await fetch(`${API}/api/sync/${source}`, { method:'POST' });
+    toast(`✅ ${source==='apple'?'Apple':'Google'} sync triggered`);
+  } catch { toast('⚠️ Backend offline'); }
+  setTimeout(() => { pill.textContent = orig; }, 2000);
+}
+
+// ── Export ────────────────────────────────────────────────────────────────────
+async function exportData(format='json') {
+  if (!S.selected) { toast('⚠️ Select a device first'); return; }
+  const d = S.devices.find(d=>d.id===S.selected);
+  window.open(`${API}/api/export/${S.selected}?format=${format}`, '_blank');
+  toast(`⬇ Downloading ${d?.name||'device'} history as ${format.toUpperCase()}`);
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function timeSince(ts) {
+  if (!ts) return '—';
+  const d = Date.now()-new Date(ts).getTime();
+  if (d<60000)   return `${Math.floor(d/1000)}s ago`;
+  if (d<3600000) return `${Math.floor(d/60000)}m ago`;
+  if (d<86400000)return `${Math.floor(d/3600000)}h ago`;
+  return new Date(ts).toLocaleDateString();
+}
+function fmtTime(ts) {
+  if (!ts) return '—';
+  return new Date(ts).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+function toast(msg) {
+  const t=document.createElement('div');t.className='toast';t.textContent=msg;
+  document.body.appendChild(t);setTimeout(()=>t.remove(),2500);
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+initMap();
+connectWS();
+</script>
+</body>
+</html>
