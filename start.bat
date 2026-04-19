@@ -28,10 +28,18 @@ if %errorlevel% neq 0 (
 :: Move into backend directory
 cd /d "%~dp0backend"
 
-:: Install dependencies if node_modules is missing
+:: Install Node dependencies if node_modules is missing
 if not exist "node_modules" (
-    echo  Installing dependencies...
+    echo  Installing Node dependencies...
     call npm install
+    echo.
+)
+
+:: Install Python dependencies if pyicloud is missing
+py -c "import pyicloud" >nul 2>&1
+if %errorlevel% neq 0 (
+    echo  Installing Python dependencies...
+    py -m pip install -r requirements.txt
     echo.
 )
 

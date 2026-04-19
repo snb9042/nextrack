@@ -29,19 +29,19 @@
 
 **2. Open your browser:** `http://localhost:3001`
 
-That's it. The app runs in simulation mode without credentials. Add them below to see your real devices.
+That's it. The map loads immediately. Add credentials below to see your real devices.
 
 ---
 
 ## Apple AirTags
 
 ```powershell
-py -m pip install pyicloud
+py -m pip install -r backend/requirements.txt
 ```
 
 Add to `backend/.env`:
 ```
-APPLE_ICLOUD_EMAIL=chexus5@icloud.com
+APPLE_ICLOUD_EMAIL=you@icloud.com
 APPLE_ICLOUD_PASSWORD=your_real_apple_id_password
 ```
 
@@ -61,7 +61,7 @@ Session cookie is saved — subsequent restarts connect silently.
 ## Android Tags (Google)
 
 ```powershell
-py -m pip install locationsharinglib
+py -m pip install -r backend/requirements.txt
 ```
 
 1. Install Chrome extension **"Get cookies.txt LOCALLY"**
