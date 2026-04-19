@@ -1,2 +1,3 @@
-pyicloud
+pyicloud-ipd
+future==1.0.0
 locationsharinglib
