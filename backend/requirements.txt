@@ -1,2 +1,5 @@
 pyicloud
 locationsharinglib
+# Optional — required only for Google Find My Device (Selenium bridge)
+selenium
+webdriver-manager

@@ -8,6 +8,7 @@ google_cookies.txt
 apple_cookies.txt
 .icloud_cookies/
 .google_token.pkl
+.chrome_findmy_profile/
 dist/
 *.log
 .DS_Store

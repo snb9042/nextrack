@@ -324,9 +324,12 @@ async function syncApple(twoFACode=null) {
 }
 
 // ── Google sync ───────────────────────────────────────────────────────────────
-const GOOGLE_BRIDGE  = path.join(__dirname, 'google_bridge.py');
-const GOOGLE_COOKIES = path.join(__dirname, 'google_cookies.txt');
-let   googleLastSync = 0;
+const GOOGLE_BRIDGE          = path.join(__dirname, 'google_bridge.py');
+const GOOGLE_COOKIES         = path.join(__dirname, 'google_cookies.txt');
+const GOOGLE_FINDMY_BRIDGE   = path.join(__dirname, 'google_findmydevice_bridge.py');
+const GOOGLE_FINDMY_PROFILE  = path.join(__dirname, '.chrome_findmy_profile');
+let   googleLastSync         = 0;
+let   googleFindMyLastSync   = 0;
 
 async function syncGoogle() {
   if (Date.now()-googleLastSync < 58000) return;
@@ -391,6 +394,72 @@ async function syncGoogle() {
   db.getAllDevices().filter(d=>d.source==='google').forEach(d=>{ try{analyzePatterns(d.id);}catch{} });
 }
 
+// ── Google Find My Device sync (Selenium — every 5 min) ───────────────────────
+async function syncGoogleFindMy() {
+  if (Date.now() - googleFindMyLastSync < 290000) return;
+  if (!fs.existsSync(GOOGLE_FINDMY_PROFILE)) {
+    if (googleFindMyLastSync === 0)
+      console.log('[Google FMD] Chrome profile not set up — run once:\n  python backend/google_findmydevice_bridge.py --login');
+    return;
+  }
+
+  let result;
+  try { result = await runPython(GOOGLE_FINDMY_BRIDGE, [], { timeoutMs: 60000 }); }
+  catch(e) { console.error('[Google FMD]', e.message); return; }
+
+  if (!result.ok) {
+    if (result.needs_install) { console.error('[Google FMD] Run: pip install selenium webdriver-manager'); return; }
+    if (result.needs_login)   { console.warn('[Google FMD]', result.error, '\n  Fix:', result.fix); return; }
+    if (result.transient)     { console.warn('[Google FMD] Transient error:', result.error); return; }
+    console.error('[Google FMD]', result.error); return;
+  }
+
+  googleFindMyLastSync = Date.now();
+  const devices = db.getAllDevices();
+  let   newCount = 0;
+
+  (result.devices || []).forEach((raw, i) => {
+    const id   = `gfmd-${raw.id || i}`;
+    const name = raw.name || `Google Device ${i + 1}`;
+    const existing   = devices.find(d => d.id === id);
+    const otherCount = devices.filter(d => d.source !== 'google_findmy').length;
+
+    db.upsertDevice({
+      id, name, source: 'google_findmy',
+      icon:           iconForName(name),
+      color:          existing?.color || COLORS[(otherCount + i) % COLORS.length],
+      status:         'active',
+      battery_level:  raw.batteryLevel != null ? Math.round(parseFloat(raw.batteryLevel) * 100) : null,
+      battery_status: null,
+      model:          raw.model || null,
+      last_seen:      new Date().toISOString(),
+    });
+
+    if (!existing) { console.log(`[Google FMD] ✅ Found: "${name}"`); newCount++; }
+
+    const loc = raw.location;
+    if (!loc?.latitude) return;
+
+    ingestLocation({
+      id: uuidv4(), device_id: id,
+      timestamp:    loc.timeStamp ? new Date(loc.timeStamp).toISOString() : new Date().toISOString(),
+      lat:          loc.latitude,
+      lng:          loc.longitude,
+      accuracy:     loc.horizontalAccuracy || null,
+      altitude:     loc.altitude || null,
+      speed:        null,
+      source:       'google_findmy',
+      network_type: 'gps',
+      address:      null,
+      is_old:       0,
+    });
+  });
+
+  if (newCount) broadcast({ event: 'devices_updated', devices: db.getAllDevices() });
+  db.getAllDevices().filter(d => d.source === 'google_findmy').forEach(d => { try { analyzePatterns(d.id); } catch {} });
+  console.log(`[Google FMD] Sync done — ${(result.devices || []).length} devices`);
+}
+
 // ── WebSocket ─────────────────────────────────────────────────────────────────
 wss.on('connection', ws => {
   const devices   = db.getAllDevices();
@@ -408,8 +477,9 @@ wss.on('connection', ws => {
   ws.on('message', raw=>{
     try {
       const {action}=JSON.parse(raw);
-      if(action==='sync_apple')  { appleLastSync=0;  syncApple(); }
-      if(action==='sync_google') { googleLastSync=0; syncGoogle(); }
+      if(action==='sync_apple')        { appleLastSync=0;        syncApple(); }
+      if(action==='sync_google')       { googleLastSync=0;       syncGoogle(); }
+      if(action==='sync_google_findmy'){ googleFindMyLastSync=0; syncGoogleFindMy(); }
     }catch{}
   });
 });
@@ -429,8 +499,9 @@ app.get('/api/devices/:id/history', (req,res)=>{
 app.get('/api/devices/:id/patterns',(req,res)=>res.json(db.getPatterns(req.params.id)));
 
 // Sync
-app.post('/api/sync/apple',  async(_,res)=>{ appleLastSync=0;  await syncApple();  res.json(db.getAllDevices().filter(d=>d.source==='apple')); });
-app.post('/api/sync/google', async(_,res)=>{ googleLastSync=0; await syncGoogle(); res.json(db.getAllDevices().filter(d=>d.source==='google')); });
+app.post('/api/sync/apple',        async(_,res)=>{ appleLastSync=0;        await syncApple();        res.json(db.getAllDevices().filter(d=>d.source==='apple')); });
+app.post('/api/sync/google',       async(_,res)=>{ googleLastSync=0;       await syncGoogle();       res.json(db.getAllDevices().filter(d=>d.source==='google')); });
+app.post('/api/sync/google-findmy',async(_,res)=>{ googleFindMyLastSync=0; await syncGoogleFindMy(); res.json(db.getAllDevices().filter(d=>d.source==='google_findmy')); });
 
 // Apple 2FA
 const twoFAAttempts = new Map(); // ip → { count, resetAt }
@@ -454,7 +525,8 @@ app.post('/api/apple/2fa', async(req,res)=>{
 });
 
 // Google
-app.get('/api/google/status', (_,res)=>res.json({ email:GOOGLE_EMAIL, cookiesPresent:fs.existsSync(GOOGLE_COOKIES), deviceCount:db.getAllDevices().filter(d=>d.source==='google').length }));
+app.get('/api/google/status',       (_,res)=>res.json({ email:GOOGLE_EMAIL, cookiesPresent:fs.existsSync(GOOGLE_COOKIES), deviceCount:db.getAllDevices().filter(d=>d.source==='google').length }));
+app.get('/api/google/findmy/status', (_,res)=>res.json({ profileReady:fs.existsSync(GOOGLE_FINDMY_PROFILE), deviceCount:db.getAllDevices().filter(d=>d.source==='google_findmy').length, lastSync:googleFindMyLastSync||null }));
 
 // Alerts
 app.get('/api/alerts',              (_,res)=>res.json(db.getAlerts(100)));
@@ -530,10 +602,12 @@ server.listen(PORT, async()=>{
 
   await syncApple();
   await syncGoogle();
+  syncGoogleFindMy(); // non-blocking; skipped if profile not set up
 
   // Apple: 60s, Google: 60s, Patterns: every 5min, Prune: 3am daily
   cron.schedule('*/60 * * * * *', ()=>{ syncApple(); syncGoogle(); });
   cron.schedule('*/5 * * * *', ()=>{
+    syncGoogleFindMy();
     db.getAllDevices().forEach(d=>{ try{analyzePatterns(d.id);}catch{} });
   });
   cron.schedule('0 3 * * *', ()=>{
