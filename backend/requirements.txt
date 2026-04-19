@@ -1,2 +1,2 @@
-pyicloud-ipd
+pyicloud
 locationsharinglib

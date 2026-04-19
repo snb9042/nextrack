@@ -35,7 +35,7 @@ def main():
     except ImportError:
         print(json.dumps({
             "ok": False,
-            "error": "pyicloud-ipd not installed. Run: pip install pyicloud-ipd  (if pyicloud is installed, uninstall it first: pip uninstall pyicloud)",
+            "error": "pyicloud not installed. Run: pip install pyicloud",
             "needs_install": True
         }))
         sys.exit(1)
